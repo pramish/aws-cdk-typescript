@@ -2,11 +2,24 @@ import * as cdk from "aws-cdk-lib";
 import { Construct } from "constructs";
 import * as APIGateway from "aws-cdk-lib/aws-apigateway";
 import * as Lambda from "aws-cdk-lib/aws-lambda";
+import * as DynamoDB from "aws-cdk-lib/aws-dynamodb";
+import * as IAM from "aws-cdk-lib/aws-iam";
 import * as Path from "path";
 
 export class AwsCdkLearnStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
+
+    // Creating a DynamoDB
+
+    const booksCatalogTable = new DynamoDB.Table(this, "usersCatalog", {
+      tableName: "users-catalog",
+      partitionKey: {
+        name: "id",
+        type: DynamoDB.AttributeType.STRING,
+      },
+      billingMode: DynamoDB.BillingMode.PAY_PER_REQUEST,
+    });
 
     // This one is for defining an API for APIGateway.
 
@@ -35,7 +48,10 @@ export class AwsCdkLearnStack extends cdk.Stack {
     const getUserLambda = new Lambda.Function(this, "get-user-lambda", {
       runtime: Lambda.Runtime.NODEJS_16_X,
       handler: "index.user",
-      code: Lambda.Code.fromAsset(Path.join(__dirname, "../src/lambdas/user")),
+      code: Lambda.Code.fromAsset(Path.join(__dirname, "../dist/user")),
+      environment: {
+        DYNAMODB_TABLE: booksCatalogTable.tableName,
+      },
     });
 
     // add a ToDo resource.
@@ -48,14 +64,19 @@ export class AwsCdkLearnStack extends cdk.Stack {
       new APIGateway.LambdaIntegration(getUserLambda, { proxy: true }),
     );
 
+    getUserLambda.addToRolePolicy(
+      new IAM.PolicyStatement({
+        actions: ["dynamodb:Scan"],
+        resources: [booksCatalogTable.tableArn],
+      }),
+    );
+
     // Get one ToDo
 
     const getUserById = new Lambda.Function(this, "get-one-user-lambda", {
       runtime: Lambda.Runtime.NODEJS_16_X,
       handler: "index.userById",
-      code: Lambda.Code.fromAsset(
-        Path.join(__dirname, "../src/lambdas/userById"),
-      ),
+      code: Lambda.Code.fromAsset(Path.join(__dirname, "../dist/user")),
     });
 
     const getUser = users.addResource("{userId}");
